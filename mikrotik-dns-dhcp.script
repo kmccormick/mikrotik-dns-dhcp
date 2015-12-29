@@ -4,8 +4,8 @@
 # https://github.com/Tolaris/mikrotik-dns-dhcp
 
 # Set the first two variables according to your installation.
-:local dhcpserver "dhcp1"
-:local zone "home.example.com"
+:local dhcpserver "default"
+:local zone "mccormicklabs.com"
 
 # Set the TTL to the scheduler frequency for this script.
 :local ttl "00:05:00"
