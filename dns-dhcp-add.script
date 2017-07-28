@@ -1,0 +1,37 @@
+# dns-dhcp-add
+#
+# This is a suite of scripts to maintain local DNS entries for DHCP clients on
+# Mikrotik RouterOS systems.
+#
+# This script will ensure proper DNS entries exist for all current DHCP leases.
+# It should be scheduled to run periodically.
+# 
+# Required Policy permissions: read,write
+
+
+# Identify this specific script in the logs
+:local LOGNAME "dns-dhcp-add"
+
+# Set DNS zone and TTL
+# These should match across the suite of scripts
+:local ZONE "mccormicklabs.com."
+:local TTL "00:05:13"
+
+
+/ip dhcp-server lease
+:foreach lease in=[find] do={
+	:local hostname [get $lease host-name]
+	:if ([:len $hostname] > 0) do={
+		:local dhcpip [get $lease address]
+		:local fqdn "$hostname.$ZONE"
+
+		# if there isn't a correct DNS entry, add one
+		/ip dns static
+		:local entries [find where name=$fqdn and address=$dhcpip]
+		:if ([:len $entries] = 0) do={
+			:log info "$LOGNAME: DNS record added: $fqdn=$dhcpip"
+			add name=$fqdn address=$dhcpip ttl=$TTL
+		}
+
+	}
+}

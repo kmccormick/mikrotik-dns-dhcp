@@ -1,0 +1,46 @@
+# dns-dhcp-gc
+#
+# This is a suite of scripts to maintain local DNS entries for DHCP clients on
+# Mikrotik RouterOS systems.
+#
+# This script will clean up DNS names that no longer have a matching DHCP lease.
+# It should be scheduled to run periodically.
+# 
+# Required Policy permissions: read,write
+
+
+# Identify this specific script in the logs
+:local LOGNAME "dns-dhcp-gc"
+
+# Set DNS zone and TTL
+# These should match across the suite of scripts
+:local ZONE "mccormicklabs.com."
+:local TTL "00:05:13"
+
+
+# length of $ZONE needed to split up the fqdn
+:local zonelen [:len $ZONE]
+
+# Remove incorrect DNS names
+/ip dns static
+:foreach dnsrecord in=[find where ttl=$TTL] do={
+	:local dnsip [get $dnsrecord address]
+	:local fqdn [get $dnsrecord name]
+	:local fqdnlen [:len $fqdn]
+	:local index ($fqdnlen - $zonelen)
+	# continue iff the fqdn is longer than $ZONE
+	:if ($index > 0) do={
+		# split fqdn into its parts
+		:local hostname [:pick $fqdn 0 ($index-1)]
+		:local zone [:pick $fqdn $index $fqdnlen]
+		:if ($zone = $ZONE) do={
+			/ip dhcp-server lease
+			# get DHCP leases matching this DNS record
+			:local leases [find where host-name=$hostname and address=$dnsip]
+			:if ([:len $leases] = 0) do={
+				:log info "$LOGNAME: removing stale DNS record $fqdn=$dnsip"
+				/ip dns static remove $dnsrecord
+			}
+		}
+	}
+}

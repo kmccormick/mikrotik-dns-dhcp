@@ -1,0 +1,48 @@
+# dns-dhcp-onlease
+#
+# This is a suite of scripts to maintain local DNS entries for DHCP clients on
+# Mikrotik RouterOS systems.
+#
+# This script will handle adding and removing DNS names when changes occur to
+# the DHCP lease. It should be assigned to the lease-script property on the
+# DHCP server to run automatically on every lease.
+# 
+# Required Policy permissions: read,write
+
+
+# Identify this specific script in the logs
+:local LOGNAME "dns-dhcp-onlease"
+
+# Set DNS zone and TTL
+# These should match across the suite of scripts
+:local ZONE "mccormicklabs.com."
+:local TTL "00:05:13"
+
+# DHCP server will set these variables before launching the script
+:log info "$LOGNAME: bound=$leaseBound, server=$leaseServerName, mac=$leaseActMAC, ip=$leaseActIP"
+
+:if ($leaseBound = 1) do={
+	# Create DNS entries for a new/updated/refreshed lease
+	/ip dhcp-server lease
+	:local lease [find where server="$leaseServerName" and active-address="$leaseActIP"]
+	:local hostname [get $lease host-name]
+	:if ([:len $hostname] > 0) do={
+		:local fqdn "$hostname.$ZONE"
+
+		# if there isn't a correct DNS entry, add one
+		/ip dns static
+		:local entries [find where name=$fqdn and address=$leaseActIP]
+		:if ([:len $entries] = 0) do={
+			:log info "$LOGNAME: DNS record added: $fqdn=$leaseActIP"
+			add name=$fqdn address=$leaseActIP ttl=$TTL
+		}
+	}
+} else={
+	# Remove DNS entries for an expired/disconnected/released lease
+	/ip dns static
+	:foreach dnsrecord in=[find where address=$leaseActIP and ttl=$TTL] do={
+		:local fqdn [get $dnsrecord name]
+		:log info "$LOGNAME: DNS record removed: $fqdn=$leaseActIP"
+		/ip dns static remove $dnsrecord
+	}
+}
